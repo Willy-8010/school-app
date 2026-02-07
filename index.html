@@ -3,61 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>上課追蹤</title>
+    <title>上課追蹤 PRO v2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 針對手機觸控優化 */
-        .cell-absent { background-color: #fee2e2; color: #b91c1c; border: 2px solid #ef4444; }
-        .cell-present { background-color: #dcfce7; color: #15803d; border: 2px solid #22c55e; }
-        td { height: 80px; min-width: 80px; transition: all 0.2s; }
-        body { -webkit-tap-highlight-color: transparent; }
+        .cell-absent { background-color: #fee2e2; color: #b91c1c; border: 2px solid #ef4444 !important; }
+        .cell-present { background-color: #dcfce7; color: #15803d; border: 2px solid #22c55e !important; }
+        .current-slot { border: 4px inset #6366f1 !important; animation: pulse 2s infinite; box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        td { height: 75px; min-width: 70px; vertical-align: middle; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-50 min-h-screen pb-10 font-sans">
 
-    <div class="sticky top-0 z-10 bg-white shadow-md p-4">
-        <h1 class="text-xl font-bold mb-3 text-center">出席率看板 (1/3 警告)</h1>
-        <div id="statsDashboard" class="flex overflow-x-auto gap-3 pb-2">
-            </div>
+    <div class="sticky top-0 z-20 bg-white shadow-md p-3">
+        <div id="statsDashboard" class="flex overflow-x-auto gap-2 no-scrollbar px-1"></div>
     </div>
 
     <div class="p-4">
-        <div id="weekSelector" class="flex gap-2 overflow-x-auto mb-6 py-2 no-scrollbar">
-            </div>
+        <div class="flex justify-between items-center mb-4 gap-2">
+            <div id="weekSelector" class="flex gap-2 overflow-x-auto no-scrollbar py-1 grow"></div>
+            <button onclick="exportData()" class="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg shrink-0 active:scale-95 transition">同步 / 備份</button>
+        </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div class="bg-indigo-600 text-white p-3 text-center font-bold text-lg" id="currentWeekTitle">第 1 週</div>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-indigo-700 text-white p-3 text-center font-bold text-lg" id="currentWeekTitle">第 1 週</div>
             <div class="overflow-x-auto">
-                <table class="w-full text-center border-collapse">
+                <table class="w-full text-center border-collapse table-fixed">
                     <thead>
-                        <tr class="bg-gray-50 text-xs text-gray-500">
-                            <th class="p-2 border-b w-12">時段</th>
-                            <th class="p-2 border-b">一</th><th class="p-2 border-b">二</th>
-                            <th class="p-2 border-b">三</th><th class="p-2 border-b">四</th>
-                            <th class="p-2 border-b">五</th>
+                        <tr class="bg-gray-100 text-[10px] text-gray-500 uppercase tracking-wider">
+                            <th class="w-10 border-b py-3">時段</th>
+                            <th class="border-b">一</th><th class="border-b">二</th><th class="border-b">三</th><th class="border-b">四</th><th class="border-b">五</th>
                         </tr>
                     </thead>
-                    <tbody id="timetableBody" class="text-[13px]">
-                        </tbody>
+                    <tbody id="timetableBody" class="text-[12px]"></tbody>
                 </table>
             </div>
         </div>
+        
+        <p class="text-[10px] text-gray-400 mt-4 text-center italic">提示：點擊格子可循環切換「未記錄 > 出席 > 缺席」</p>
     </div>
 
     <script>
-        const timeSlots = ["08:10", "09:10", "10:10", "11:10", "13:00", "14:10", "15:10"];
+        const timeSlots = [
+            { s: "08:10", e: "09:00" }, { s: "09:10", e: "10:00" }, { s: "10:10", e: "11:00" },
+            { s: "11:10", e: "12:00" }, { s: "13:00", e: "13:50" }, { s: "14:10", e: "15:00" }, { s: "15:10", e: "16:00" }
+        ];
+
+        // 根據您更新後的 CSV 填入
         const rawSchedule = [
             ["補強數學[選]", "彈性學習時間", "選修物理-電磁現象二與量子現象[選]", "多元選修[選]", "體育[必]"],
-            ["語文表達與傳播應用[選]", "彈性學習時間", "英文閱讀與寫作[選]", "多元選修[選]", "補強數學"],
-            ["語文表達與傳播應用[選]", "選修化學-化學反應與平衡二[選]", "國學常識[選]", "英文閱讀與寫作[選]", "選修物理-波動、光及聲音"],
-            ["英文聽講", "體育[必]", "選修化學-有機化學與應用科技[選]", "數學甲[選]", "專題閱讀與研究"],
+            ["語文表達與傳播應用[選]", "彈性學習時間", "英文閱讀與寫作[選]", "多元選修[選]", "補強數學[選]"],
+            ["語文表達與傳播應用[選]", "選修化學-化學反應與平衡二[選]", "國學常識[選]", "英文閱讀與寫作[選]", "選修物理-波動、光及聲音[選]"],
+            ["英文聽講[選]", "體育[必]", "選修化學-有機化學與應用科技[選]", "數學甲[選]", "專題閱讀與研究[選]"],
             ["音樂[必]", "數學甲[選]", "藝術生活[必]", "自主學習時間", "閱讀與研究模組-科學閱讀與研究[必]"],
             ["選修物理-電磁現象二與量子現象[選]", "國學常識[選]", "數學甲[選]", "團體活動時間", "全民國防教育[必]"],
-            ["選修化學-化學反應與平衡二[選]", "英文聽講[選]", "數學甲[選]", "團體活動時間", "補強英語"]
+            ["選修化學-化學反應與平衡二[選]", "英文聽講[選]", "數學甲[選]", "團體活動時間", "補強英語[選]"]
         ];
 
         let currentWeek = 1;
-        let attendance = JSON.parse(localStorage.getItem('edu_attendance_mobile')) || {};
+        let attendance = JSON.parse(localStorage.getItem('edu_v2_final')) || {};
 
         function init() {
             renderWeekSelector();
@@ -70,11 +75,21 @@
             container.innerHTML = '';
             for(let i=1; i<=17; i++) {
                 const btn = document.createElement('button');
-                btn.className = `flex-none px-5 py-2 rounded-xl font-bold transition ${currentWeek === i ? 'bg-indigo-600 text-white shadow-lg scale-105' : 'bg-white text-gray-400 border'}`;
-                btn.innerText = `W${i}`;
-                btn.onclick = () => { currentWeek = i; init(); };
+                btn.className = `flex-none w-10 h-10 rounded-full font-bold transition ${currentWeek === i ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-400 border'}`;
+                btn.innerText = i;
+                btn.onclick = () => { currentWeek = i; renderTable(); };
                 container.appendChild(btn);
             }
+        }
+
+        function isCurrentSlot(dayIdx, slotIdx) {
+            const now = new Date();
+            const day = now.getDay(); // 1 (Mon) to 5 (Fri)
+            if (day !== dayIdx + 1) return false;
+
+            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+            const slot = timeSlots[slotIdx];
+            return timeStr >= slot.s && timeStr <= slot.e;
         }
 
         function renderTable() {
@@ -82,32 +97,31 @@
             const tbody = document.getElementById('timetableBody');
             tbody.innerHTML = '';
 
-            timeSlots.forEach((time, rIdx) => {
+            timeSlots.forEach((slot, rIdx) => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="text-[10px] text-gray-400 border-r bg-gray-50 font-medium">${time}</td>`;
+                tr.innerHTML = `<td class="text-[9px] text-gray-400 border-r bg-gray-50 leading-tight font-medium">${slot.s}<br>至<br>${slot.e}</td>`;
                 
                 rawSchedule[rIdx].forEach((course, cIdx) => {
                     const key = `${currentWeek}-${rIdx}-${cIdx}`;
                     const status = attendance[key] || 'none';
                     const td = document.createElement('td');
-                    td.className = `border-b border-r p-1 relative active:scale-95 transition-transform ${status === 'present' ? 'cell-present' : (status === 'absent' ? 'cell-absent' : 'text-gray-800')}`;
+                    const isCurrent = isCurrentSlot(cIdx, rIdx);
+                    
+                    td.className = `border-b border-r p-1 relative active:bg-gray-100 transition-colors ${status === 'present' ? 'cell-present' : (status === 'absent' ? 'cell-absent' : 'text-gray-800')} ${isCurrent ? 'current-slot' : ''}`;
                     
                     const isRequired = course.includes("[必]");
                     const isElective = course.includes("[選]");
                     const displayName = course.replace("[必]", "").replace("[選]", "");
 
-                    td.innerHTML = `
-                        <div class="font-bold leading-tight mb-1">${displayName}</div>
-                        <div class="text-[9px] opacity-70">${isRequired ? '必修' : (isElective ? '選修' : '')}</div>
-                        <div class="absolute bottom-1 right-1 text-xs">${status === 'present' ? '✅' : (status === 'absent' ? '❌' : '')}</div>
-                    `;
+                    td.innerHTML = `<div class="font-extrabold leading-tight mb-0.5">${displayName}</div>
+                                    <div class="text-[8px] opacity-50">${isRequired?'必修':(isElective?'選修':'')}</div>
+                                    <div class="absolute top-0 right-0 p-0.5 text-[8px]">${status === 'present' ? '✅' : (status === 'absent' ? '❌' : '')}</div>`;
                     
                     td.onclick = () => {
                         const next = status === 'none' ? 'present' : (status === 'present' ? 'absent' : 'none');
                         if (next === 'none') delete attendance[key]; else attendance[key] = next;
-                        localStorage.setItem('edu_attendance_mobile', JSON.stringify(attendance));
-                        renderTable();
-                        renderStats();
+                        localStorage.setItem('edu_v2_final', JSON.stringify(attendance));
+                        renderTable(); renderStats();
                     };
                     tr.appendChild(td);
                 });
@@ -120,12 +134,7 @@
             statsContainer.innerHTML = '';
             const subjectStats = {};
 
-            rawSchedule.forEach((row, rIdx) => {
-                row.forEach((course) => {
-                    if(!subjectStats[course]) subjectStats[course] = { total: 17, absent: 0 };
-                });
-            });
-
+            rawSchedule.flat().forEach(name => { if(!subjectStats[name]) subjectStats[name] = { total: 17, absent: 0 }; });
             Object.keys(attendance).forEach(key => {
                 const [w, r, c] = key.split('-');
                 if(attendance[key] === 'absent') subjectStats[rawSchedule[r][c]].absent++;
@@ -133,18 +142,41 @@
 
             Object.entries(subjectStats).forEach(([name, data]) => {
                 const percent = ((data.absent / data.total) * 100).toFixed(1);
-                const isDanger = data.absent / data.total >= 0.333;
+                const isDanger = (data.absent / data.total) >= 0.333;
                 const card = document.createElement('div');
-                card.className = `flex-none w-32 p-3 rounded-2xl border-2 ${isDanger ? 'bg-red-50 border-red-500 animate-pulse' : 'bg-white border-indigo-100 shadow-sm'}`;
-                card.innerHTML = `
-                    <div class="text-[10px] font-bold text-gray-500 truncate">${name}</div>
-                    <div class="text-lg font-black ${isDanger ? 'text-red-600' : 'text-indigo-600'}">${percent}%</div>
-                    <div class="text-[9px] text-gray-400">缺 ${data.absent} 堂</div>
-                `;
+                card.className = `flex-none w-28 p-2 rounded-xl border-2 transition-all ${isDanger ? 'bg-red-50 border-red-500 animate-pulse' : 'bg-white border-indigo-100'}`;
+                card.innerHTML = `<div class="text-[9px] font-bold text-gray-400 truncate">${name}</div>
+                                  <div class="text-md font-black ${isDanger ? 'text-red-600' : 'text-indigo-600'}">${percent}%</div>
+                                  <div class="text-[8px] text-gray-400">缺席 ${data.absent} 堂</div>`;
                 statsContainer.appendChild(card);
             });
         }
+
+        function exportData() {
+            const dataStr = JSON.stringify(attendance);
+            const action = confirm("【同步功能】\n\n按「確定」：複製目前手機的紀錄代碼 (傳給電腦)。\n按「取消」：進入貼上模式 (接收電腦的資料)。");
+            if (action) {
+                const tempInput = document.createElement("textarea");
+                tempInput.value = dataStr;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+                alert("代碼已複製到剪貼簿！請將它傳送到另一台設備。");
+            } else {
+                const input = prompt("請在下方貼入來自另一台設備的紀錄代碼：");
+                if (input) {
+                    try {
+                        const parsed = JSON.parse(input);
+                        attendance = parsed;
+                        localStorage.setItem('edu_v2_final', JSON.stringify(attendance));
+                        location.reload();
+                    } catch(e) { alert("代碼無效，請確認是否複製完整。"); }
+                }
+            }
+        }
         init();
+        setInterval(renderTable, 60000); // 每分鐘更新一次高亮狀態
     </script>
 </body>
 </html>
